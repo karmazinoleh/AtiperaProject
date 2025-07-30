@@ -7,7 +7,7 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class BranchResponce {
+public class BranchResponse {
     String branchName;
     String lastCommitHash;
 }

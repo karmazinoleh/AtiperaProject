@@ -12,5 +12,5 @@ import java.util.List;
 public class RepositoryResponse {
     private String repositoryName;
     private String ownerLogin;
-    private List<BranchResponce> branches;
+    private List<BranchResponse> branches;
 }
