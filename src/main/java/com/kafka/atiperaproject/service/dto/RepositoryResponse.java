@@ -4,13 +4,5 @@ import lombok.*;
 
 import java.util.List;
 
-@Data
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-public class RepositoryResponse {
-    private String repositoryName;
-    private String ownerLogin;
-    private List<BranchResponse> branches;
-}
+
+public record RepositoryResponse(String repositoryName, String ownerLogin, List<BranchResponse> branches) {}

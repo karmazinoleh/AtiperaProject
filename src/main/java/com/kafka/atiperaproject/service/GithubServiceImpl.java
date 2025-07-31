@@ -1,76 +1,64 @@
 package com.kafka.atiperaproject.service;
 
+import com.kafka.atiperaproject.exception.ExternalApiException;
 import com.kafka.atiperaproject.service.dto.BranchResponse;
 import com.kafka.atiperaproject.service.dto.RepositoryResponse;
+import com.kafka.atiperaproject.service.dto.github.GithubApiBranch;
+import com.kafka.atiperaproject.service.dto.github.GithubApiRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class GithubServiceImpl implements GithubService {
-    private final RestTemplate restTemplate;
 
-    public GithubServiceImpl(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    private final RestClient restClient;
+
+    public GithubServiceImpl(RestClient.Builder builder) {
+        this.restClient = builder.baseUrl("https://api.github.com").build();
     }
 
     @Override
     public List<RepositoryResponse> getUserRepositories(String userName) {
-        try {
-            String url = "https://api.github.com/users/" + userName + "/repos";
-            ResponseEntity<List> request = restTemplate.getForEntity(url, List.class);
-            List<Map<String, Object>> repositories = request.getBody();
-            if (repositories == null) return List.of();
-            List<RepositoryResponse> responseList = new ArrayList<>();
+        GithubApiRepository[] repositories = restClient.get()
+                .uri("/users/{username}/repos", userName)
+                .retrieve()
+                .body(GithubApiRepository[].class);
 
-            for (Map<String, Object> repo : repositories) {
-                if ((Boolean) repo.get("fork") != true) {
-                    Map<String, Object> owner = (Map<String, Object>) repo.get("owner");
-
-                    RepositoryResponse repositoryResponse = new RepositoryResponse();
-                    repositoryResponse.setOwnerLogin(owner.get("login").toString());
-                    repositoryResponse.setRepositoryName(repo.get("name").toString());
-                    repositoryResponse.setBranches(getBranches(userName, repo.get("name").toString()));
-
-                    responseList.add(repositoryResponse);
-                }
-            }
-            return responseList;
-
-        } catch (HttpClientErrorException.NotFound e){
-            throw e;
-        } catch (Exception e){
-            throw new RuntimeException(e);
+        if (repositories == null) {
+            throw new ExternalApiException("Empty response from GitHub API");
         }
+
+        return Arrays.stream(repositories)
+                .filter(repo -> !repo.fork())
+                .map(repo -> new RepositoryResponse(
+                        repo.name(),
+                        repo.owner().login(),
+                        getBranches(repo.owner().login(), repo.name())
+                ))
+                .toList();
     }
 
     @Override
     public List<BranchResponse> getBranches(String ownerName, String repoName) {
-        String url = "https://api.github.com/repos/" + ownerName + "/" + repoName + "/branches";
-        ResponseEntity<List> request = restTemplate.getForEntity(url, List.class);
-        List<Map<String, Object>> branches = request.getBody();
+        GithubApiBranch[] branches = restClient.get()
+                .uri("/repos/{owner}/{repo}/branches", ownerName, repoName)
+                .retrieve()
+                .body(GithubApiBranch[].class);
 
-        if (branches == null) return List.of();
-
-        List<BranchResponse> branchList = new ArrayList<>();
-
-        for (Map<String, Object> branch : branches) {
-            Map<String, Object> commit = (Map<String, Object>) branch.get("commit");
-
-            BranchResponse branchResponse = new BranchResponse();
-            branchResponse.setBranchName(branch.get("name").toString());
-            branchResponse.setLastCommitHash(commit.get("sha").toString());
-
-            branchList.add(branchResponse);
+        if (branches == null) {
+            throw new ExternalApiException("Empty response from GitHub API");
         }
 
-
-        return branchList;
+        return Arrays.stream(branches)
+                .map(branch -> new BranchResponse(branch.name(), branch.commit().sha()))
+                .toList();
     }
-
 }
